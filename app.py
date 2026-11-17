@@ -1,31 +1,33 @@
 import streamlit as st
 import pandas as pd
+from fpdf import FPDF
+import base64
 
-# Configuração da página com layout mobile-friendly
+# Configuração da página
 st.set_page_config(
-    page_title="CookieGestão App",
+    page_title="Doces da Mel - Gestão & Orçamentos",
     page_icon="🍪",
     layout="centered",
     initial_sidebar_state="collapsed"
 )
 
-# --- CSS CUSTOMIZADO PARA DAR CARA DE APLICATIVO MOBILE ---
+# --- CSS CUSTOMIZADO PARA ESTILO APP MOBILE ---
 st.markdown("""
 <style>
     .main {
-        background-color: #f8f9fa;
+        background-color: #fcf6f2;
     }
     .stButton>button {
         width: 100%;
         border-radius: 12px;
-        background-color: #ff6b6b;
+        background-color: #d97706;
         color: white;
         font-weight: bold;
         height: 48px;
         border: none;
     }
     .stButton>button:hover {
-        background-color: #ff5252;
+        background-color: #b45309;
         color: white;
     }
     div.stMetric {
@@ -49,24 +51,25 @@ if "insumos" not in st.session_state:
 
 if "receitas" not in st.session_state:
     st.session_state.receitas = pd.DataFrame([
-        {"Sabor": "Tradicional", "Ingrediente": "Farinha de Trigo", "Qtd Usada": 250.0},
-        {"Sabor": "Tradicional", "Ingrediente": "Manteiga sem Sal", "Qtd Usada": 150.0},
-        {"Sabor": "Tradicional", "Ingrediente": "Açúcar Mascavo", "Qtd Usada": 100.0},
-        {"Sabor": "Tradicional", "Ingrediente": "Gotas de Chocolate", "Qtd Usada": 200.0},
-        {"Sabor": "Tradicional", "Ingrediente": "Ovos", "Qtd Usada": 1.0},
+        {"Sabor": "Cookie Tradicional", "Ingrediente": "Farinha de Trigo", "Qtd Usada": 250.0},
+        {"Sabor": "Cookie Tradicional", "Ingrediente": "Manteiga sem Sal", "Qtd Usada": 150.0},
+        {"Sabor": "Cookie Tradicional", "Ingrediente": "Açúcar Mascavo", "Qtd Usada": 100.0},
+        {"Sabor": "Cookie Tradicional", "Ingrediente": "Gotas de Chocolate", "Qtd Usada": 200.0},
+        {"Sabor": "Cookie Tradicional", "Ingrediente": "Ovos", "Qtd Usada": 1.0},
     ])
 
 if "precos_praticados" not in st.session_state:
     st.session_state.precos_praticados = {
-        "Tradicional": 5.50
+        "Cookie Tradicional": 5.50
     }
 
 if "rendimentos" not in st.session_state:
     st.session_state.rendimentos = {
-        "Tradicional": 12
+        "Cookie Tradicional": 12
     }
 
-st.title("🍪 CookieGestão App")
+st.title("🍪 Doces da Mel")
+st.markdown("##### Sistema de Custos, Precificação & Orçamentos")
 st.markdown("---")
 
 # Navegação em Abas Estilo App Mobile
@@ -74,8 +77,8 @@ aba1, aba2, aba3, aba4 = st.tabs(["📦 Insumos", "📖 Receitas", "💰 Precifi
 
 # --- ABA 1: ESTOQUE DE INSUMOS & ÚLTIMA COMPRA ---
 with aba1:
-    st.subheader("📦 Seus Insumos e Última Compra")
-    st.markdown("Atualize o preço pago na última ida ao mercado. O custo dos cookies será recalculado automaticamente!")
+    st.subheader("📦 Insumos & Última Compra")
+    st.markdown("Atualize o preço pago na última ida ao mercado para manter seus custos sempre em dia.")
     
     with st.form("form_insumo", clear_on_submit=True):
         st.markdown("#### Adicionar / Atualizar Insumo")
@@ -84,7 +87,7 @@ with aba1:
         qtd_emb = st.number_input("Quantidade na Embalagem (ex: 1000 para 1kg, 12 para ovos)", min_value=0.01, value=1000.0)
         preco_compra = st.number_input("Preço Pago na Última Compra (R$)", min_value=0.01, value=10.0)
         
-        btn_salvar_ing = st.form_submit_button("Salvar no Estoque")
+        btn_salvar_ing = st.form_submit_button("Salvar Insumo")
         if btn_salvar_ing and nome_ing:
             df_ins = st.session_state.insumos
             if nome_ing in df_ins["Ingrediente"].values:
@@ -95,39 +98,43 @@ with aba1:
                 st.session_state.insumos = pd.concat([df_ins, novo_reg], ignore_index=True)
                 st.success(f"Insumo '{nome_ing}' adicionado com sucesso!")
 
-    st.markdown("### 📋 Estoque Atual")
+    st.markdown("### 📋 Seus Insumos Cadastrados")
     for _, row in st.session_state.insumos.iterrows():
         custo_unit_base = row["Preço Última Compra (R$)"] / row["Qtd Embalagem"] if row["Qtd Embalagem"] > 0 else 0
         with st.container():
-            st.markdown(f"""
+            col_i1, col_i2 = st.columns([3, 1])
+            col_i1.markdown(f"""
             **{row['Ingrediente']}** ({row['Unidade']})  
             *Embalagem:* {row['Qtd Embalagem']} {row['Unidade']} | *Última Compra:* R$ {row['Preço Última Compra (R$)']:.2f}  
             ⚡ *Custo por {row['Unidade']}:* R$ {custo_unit_base:.4f}
             """)
+            if col_i2.button("🗑️", key=f"del_ing_{row['Ingrediente']}"):
+                st.session_state.insumos = st.session_state.insumos[st.session_state.insumos["Ingrediente"] != row["Ingrediente"]]
+                st.rerun()
             st.divider()
 
 # --- ABA 2: RECEITAS DINÂMICAS ---
 with aba2:
     st.subheader("📖 Ficha Técnica de Receitas")
-    st.markdown("Monte a receita selecionando os insumos cadastrados no seu estoque.")
+    st.markdown("Monte e estruture suas receitas selecionando os insumos do seu estoque.")
     
     with st.form("form_receita", clear_on_submit=True):
-        sabor_nome = st.text_input("Nome do Sabor do Cookie (ex: Ninho com Nutella)")
+        sabor_nome = st.text_input("Nome do Sabor do Cookie (ex: Red Velvet com Chocolate Branco)")
         ing_disponiveis = st.session_state.insumos["Ingrediente"].tolist()
         
         if not ing_disponiveis:
             st.warning("Cadastre insumos na aba anterior primeiro!")
         else:
-            ing_sel = st.selectbox("Selecionar Ingrediente do Estoque", ing_disponiveis)
+            ing_sel = st.selectbox("Selecionar Ingrediente", ing_disponiveis)
             qtd_usada_rec = st.number_input("Quantidade usada na fornada", min_value=0.01, value=50.0)
             rendimento_fornada = st.number_input("Quantos cookies essa fornada rende?", min_value=1, value=12)
             
-            btn_add_receita = st.form_submit_button("Adicionar à Receita")
+            btn_add_receita = st.form_submit_button("Adicionar Ingrediente à Receita")
             if btn_add_receita and sabor_nome:
                 st.session_state.rendimentos[sabor_nome] = rendimento_fornada
                 nova_linha = pd.DataFrame([{"Sabor": sabor_nome, "Ingrediente": ing_sel, "Qtd Usada": qtd_usada_rec}])
                 st.session_state.receitas = pd.concat([st.session_state.receitas, nova_linha], ignore_index=True)
-                st.success(f"Ingrediente adicionado ao cookie {sabor_nome}!")
+                st.success(f"Ingrediente adicionado à receita!")
 
     st.markdown("### 🍳 Receitas Cadastradas")
     sabores_cadastrados = st.session_state.receitas["Sabor"].unique()
@@ -136,14 +143,15 @@ with aba2:
             itens_sabor = st.session_state.receitas[st.session_state.receitas["Sabor"] == sabor]
             st.dataframe(itens_sabor, use_container_width=True)
             
-            if st.button(f"Excluir receita '{sabor}'", key=f"del_rec_{sabor}"):
+            col_r1, col_r2 = st.columns(2)
+            if col_r1.button(f"Excluir Receita", key=f"del_rec_{sabor}"):
                 st.session_state.receitas = st.session_state.receitas[st.session_state.receitas["Sabor"] != sabor]
                 st.rerun()
 
 # --- ABA 3: PRECIFICAÇÃO & MARGEM PERCENTUAL REAL ---
 with aba3:
-    st.subheader("💰 Precificação & Margem de Lucro (%)")
-    st.markdown("Defina seu **Preço Praticado**. O sistema calcula a margem percentual real instantaneamente!")
+    st.subheader("💰 Precificação & Margem (%)")
+    st.markdown("Defina o **Preço Praticado**. Acompanhe o lucro em Reais e a porcentagem real da sua margem!")
     
     sabores = st.session_state.receitas["Sabor"].unique()
     
@@ -199,17 +207,19 @@ with aba3:
         """)
         st.divider()
 
-# --- ABA 4: ORÇAMENTO ---
+# --- ABA 4: ORÇAMENTO & GERAÇÃO DE PDF ---
 with aba4:
-    st.subheader("📄 Gerador de Orçamento Rápido")
-    cliente_nome = st.text_input("Nome da Cliente / Festa", value="Maria da Silva")
+    st.subheader("📄 Gerador de Orçamento em PDF")
+    st.markdown("Monte o pedido e gere um arquivo PDF profissional para enviar direto no WhatsApp da cliente!")
+    
+    cliente_nome = st.text_input("Nome da Cliente", value="Maria da Silva")
     
     sabores_disponiveis = list(st.session_state.precos_praticados.keys())
     if not sabores_disponiveis:
         st.warning("Cadastre receitas e preços primeiro!")
     else:
-        sabor_orc = st.selectbox("Sabor do Cookie", sabores_disponiveis)
-        qtd_orc = st.number_input("Quantidade de Cookies", min_value=1, value=10)
+        sabor_orc = st.selectbox("Sabor do Cookie", sabores_disponiveis, key="orc_sabor")
+        qtd_orc = st.number_input("Quantidade de Cookies", min_value=1, value=10, key="orc_qtd")
         
         preco_unit_venda = st.session_state.precos_praticados.get(sabor_orc, 5.00)
         subtotal_orc = qtd_orc * preco_unit_venda
@@ -219,11 +229,67 @@ with aba4:
         st.markdown(f"""
         * **Cliente:** {cliente_nome}
         * **Item:** {qtd_orc}x Cookies de {sabor_orc}
-        * **Preço Unitário Praticado:** R$ {preco_unit_venda:.2f}
+        * **Valor Unitário:** R$ {preco_unit_venda:.2f}
         * ### **TOTAL DO PEDIDO: R$ {subtotal_orc:.2f}**
         """)
         
-        if st.button("Gerar Mensagem Pronta para WhatsApp"):
-            msg_zap = f"Olá, {cliente_nome}! 🍪 Segue o orçamento dos cookies artesanais:\n\n* {qtd_orc}x Cookies de {sabor_orc}\n* Valor Unitário: R$ {preco_unit_venda:.2f}\n* *Total do Pedido: R$ {subtotal_orc:.2f}*\n\nPodemos confirmar sua encomenda?"
-            st.code(msg_zap)
-            st.success("Mensagem gerada com sucesso! Copie acima e mande no WhatsApp da cliente.")
+        # Gerador de PDF Profissional em FPDF
+        def gerar_pdf_orcamento(cliente, sabor, qtd, preco_unit, total):
+            pdf = FPDF(unit="mm", format="A5")
+            pdf.add_page()
+            
+            # Cabeçalho
+            pdf.set_font("helvetica", "B", 16)
+            pdf.set_text_color(180, 83, 9) # Cor marrom/doce
+            pdf.cell(0, 10, "DOCES DA MEL", 0, 1, "C")
+            
+            pdf.set_font("helvetica", "", 10)
+            pdf.set_text_color(100, 100, 100)
+            pdf.cell(0, 6, "Cookies Artesanais Fresquinhos", 0, 1, "C")
+            pdf.ln(5)
+            
+            # Caixa de Dados do Cliente
+            pdf.set_fill_color(252, 246, 242)
+            pdf.set_font("helvetica", "B", 11)
+            pdf.set_text_color(50, 50, 50)
+            pdf.cell(0, 8, f" Orçamento para: {cliente}", 0, 1, "L", True)
+            
+            pdf.set_font("helvetica", "", 10)
+            pdf.cell(0, 6, f" Validade da proposta: 7 dias", 0, 1, "L", True)
+            pdf.ln(5)
+            
+            # Tabela de Itens
+            pdf.set_fill_color(217, 119, 6)
+            pdf.set_text_color(255, 255, 255)
+            pdf.set_font("helvetica", "B", 10)
+            pdf.cell(85, 8, " Descrição do Item", 1, 0, "L", True)
+            pdf.cell(20, 8, " Qtd", 1, 0, "C", True)
+            pdf.cell(25, 8, " Total", 1, 1, "R", True)
+            
+            pdf.set_font("helvetica", "", 10)
+            pdf.set_text_color(50, 50, 50)
+            pdf.cell(85, 8, f" Cookie - {sabor}", 1, 0, "L")
+            pdf.cell(20, 8, f"{qtd}", 1, 0, "C")
+            pdf.cell(25, 8, f"R$ {total:.2f}", 1, 1, "R")
+            
+            pdf.ln(5)
+            
+            # Total Geral Destacado
+            pdf.set_font("helvetica", "B", 12)
+            pdf.set_text_color(180, 83, 9)
+            pdf.cell(105, 10, "VALOR TOTAL:", 0, 0, "R")
+            pdf.cell(25, 10, f"R$ {total:.2f}", 0, 1, "R")
+            
+            pdf.ln(10)
+            pdf.set_font("helvetica", "I", 9)
+            pdf.set_text_color(120, 120, 120)
+            pdf.cell(0, 6, "Obrigada pela preferência! Feche seu pedido com antecedência.", 0, 1, "C")
+            
+            return pdf.output()
+
+        if st.button("📥 Baixar Orçamento em PDF"):
+            pdf_bytes = gerar_pdf_orcamento(cliente_nome, sabor_orc, int(qtd_orc), preco_unit_venda, subtotal_orc)
+            b64 = base64.b64encode(pdf_bytes).decode('utf-8')
+            href = f'<a href="data:application/pdf;base64,{b64}" download="Orcamento_Doces_da_Mel.pdf" target="_blank" style="display: inline-block; padding: 12px 20px; background-color: #22c55e; color: white; text-align: center; border-radius: 12px; text-decoration: none; font-weight: bold; width: 100%;">📄 Clique aqui para baixar o PDF Pronto!</a>'
+            st.markdown(href, unsafe_allow_html=True)
+            st.success("PDF gerado com sucesso! Basta baixar e enviar pelo WhatsApp.")
